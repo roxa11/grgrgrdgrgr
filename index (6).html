@@ -1,0 +1,188 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CityFlow Semey - Единая платформа городских заявок</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Tektur:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <div class="brand-mark">SF</div>
+                <div>
+                    <p class="brand-title">CityFlow Semey</p>
+                    <p class="brand-subtitle">Единая экосистема городских обращений</p>
+                </div>
+            </div>
+
+            <div class="topbar-right">
+                <span id="connection-badge" class="pill bad">База: не подключена</span>
+                <span id="user-chip" class="pill hidden"></span>
+                <button id="btn-logout" class="btn btn-ghost hidden" type="button">Выйти</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="app-shell">
+        <section id="setup-banner" class="setup hidden">
+            Заполните в <code>app.js</code> объект <code>APP_CONFIG.FIREBASE</code> данными из Firebase Console.
+            После этого перезагрузите страницу.
+        </section>
+
+        <section id="view-login" class="panel login-layout">
+            <h1 class="panel-title">Вход в систему</h1>
+            <p class="panel-subtitle">Роли определяются по ИИН: житель, подрядчик или администрация.</p>
+
+            <form id="login-form" class="grid" style="margin-top:16px;">
+                <div class="field">
+                    <label for="login-iin">ИИН</label>
+                    <input id="login-iin" type="text" maxlength="12" placeholder="12 цифр" required>
+                </div>
+                <div class="field">
+                    <label for="login-name">ФИО</label>
+                    <input id="login-name" type="text" maxlength="80" placeholder="Например: Омаров Серик" required>
+                </div>
+                <button class="btn btn-primary" type="submit">Войти</button>
+            </form>
+
+            <div class="alert">
+                Демо-ИИН для ролей: админ - <b>999999999999</b>, подрядчик 1 - <b>222222222222</b>, подрядчик 2 - <b>333333333333</b>.
+            </div>
+        </section>
+
+        <section id="view-citizen" class="hidden">
+            <div class="panel">
+                <div class="inline" style="justify-content:space-between;">
+                    <div>
+                        <h2 class="panel-title">Модуль «Активный житель»</h2>
+                        <p class="panel-subtitle">Подача заявок, геометка, фотофиксация и приемка результата.</p>
+                    </div>
+                    <button id="citizen-refresh" class="btn btn-secondary" type="button">Обновить</button>
+                </div>
+
+                <form id="citizen-form" class="grid cols-2" style="margin-top:18px;">
+                    <div class="field">
+                        <label for="req-address">Адрес проблемы</label>
+                        <input id="req-address" type="text" placeholder="г. Семей, улица, дом" required>
+                    </div>
+                    <div class="field">
+                        <label for="req-category">Категория</label>
+                        <select id="req-category">
+                            <option value="roads">Дороги и ямы</option>
+                            <option value="lights">Освещение</option>
+                            <option value="trash">Вывоз мусора</option>
+                            <option value="water">Водоснабжение</option>
+                            <option value="other">Благоустройство</option>
+                        </select>
+                    </div>
+                    <div class="field" style="grid-column:1 / -1;">
+                        <label for="req-description">Описание</label>
+                        <textarea id="req-description" placeholder="Опишите проблему: что случилось, где именно, что мешает жителям" required></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="req-photo">Фото проблемы (обязательно)</label>
+                        <input id="req-photo" type="file" accept="image/*" required>
+                    </div>
+                    <div class="field">
+                        <label>Геолокация</label>
+                        <div class="inline">
+                            <button id="btn-detect-geo" class="btn btn-secondary" type="button">Определить мою точку</button>
+                            <span class="hint">или кликните на карту ниже</span>
+                        </div>
+                        <div class="inline" style="margin-top:8px;">
+                            <input id="req-lat" type="text" placeholder="Широта" readonly>
+                            <input id="req-lng" type="text" placeholder="Долгота" readonly>
+                        </div>
+                    </div>
+                    <div style="grid-column:1 / -1;">
+                        <button class="btn btn-primary" type="submit">Отправить заявку</button>
+                    </div>
+                </form>
+
+                <div id="citizen-map" class="map small"></div>
+            </div>
+
+            <div class="panel">
+                <h3 class="panel-title" style="font-size:20px;">История моих обращений</h3>
+                <p id="citizen-points" class="panel-subtitle"></p>
+                <div id="citizen-list" class="feed" style="margin-top:12px;"></div>
+            </div>
+        </section>
+
+        <section id="view-admin" class="hidden">
+            <div class="panel">
+                <div class="inline" style="justify-content:space-between;">
+                    <div>
+                        <h2 class="panel-title">Модуль «Контроль и аналитика»</h2>
+                        <p class="panel-subtitle">Диспетчеризация, SLA и карта горячих точек.</p>
+                    </div>
+                    <button id="admin-refresh" class="btn btn-secondary" type="button">Обновить</button>
+                </div>
+
+                <div class="stats">
+                    <article class="stat"><strong id="stat-total">0</strong><span>Всего заявок</span></article>
+                    <article class="stat"><strong id="stat-open">0</strong><span>Открытые</span></article>
+                    <article class="stat"><strong id="stat-avg">0 ч</strong><span>Среднее устранение</span></article>
+                    <article class="stat"><strong id="stat-sla">0</strong><span>SLA просрочено (48ч)</span></article>
+                </div>
+
+                <div class="grid cols-2" style="margin-top:14px;">
+                    <div>
+                        <h3 style="margin:0;">Карта горячих точек</h3>
+                        <div id="admin-map" class="map"></div>
+                    </div>
+                    <div>
+                        <h3 style="margin:0;">Рейтинг подрядчиков</h3>
+                        <ul id="contractor-ranking" class="rank-list"></ul>
+                        <div id="admin-hotspot" class="alert"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3 class="panel-title" style="font-size:20px;">Лента заявок</h3>
+                <div id="admin-feed" class="feed" style="margin-top:12px;"></div>
+            </div>
+        </section>
+
+        <section id="view-worker" class="hidden">
+            <div class="panel">
+                <div class="inline" style="justify-content:space-between;">
+                    <div>
+                        <h2 class="panel-title">Модуль «Полевой сотрудник»</h2>
+                        <p class="panel-subtitle">Рабочий лист, фото «до/после» и учет времени.</p>
+                    </div>
+                    <button id="worker-refresh" class="btn btn-secondary" type="button">Обновить</button>
+                </div>
+
+                <div class="stats" style="margin-bottom:14px;">
+                    <article class="stat"><strong id="worker-total">0</strong><span>Назначено мне</span></article>
+                    <article class="stat"><strong id="worker-active">0</strong><span>В работе</span></article>
+                    <article class="stat"><strong id="worker-check">0</strong><span>Ждут приемки</span></article>
+                    <article class="stat"><strong id="worker-rework">0</strong><span>На доработке</span></article>
+                </div>
+
+                <h3 style="margin:0;">Карта задач подрядчика</h3>
+                <div id="worker-map" class="map"></div>
+            </div>
+
+            <div class="panel">
+                <h3 class="panel-title" style="font-size:20px;">Рабочий список задач</h3>
+                <div id="worker-feed" class="feed" style="margin-top:12px;"></div>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="app.js"></script>
+</body>
+</html>
